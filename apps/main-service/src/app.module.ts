@@ -7,10 +7,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MainDataSource } from './config/typeorm.config';
 import { ChatGateway } from './chat/chat.gateway';
-// import { ChatController } from './chat/chat.controller';
-// import { ChatService } from './chat/chat.service';
-// import { KafkaConsumerService } from './kafka/kafka-consumer.service';
-// import { KafkaProducerService } from './kafka/kafka-producer.service';
+import { ChatController } from './chat/chat.controller';
+import { ChatService } from './chat/chat.service';
+import { KafkaConsumerService } from './kafka/kafka-consumer.service';
+import { KafkaProducerService } from './kafka/kafka-producer.service';
 
 @Module({
   imports: [
@@ -36,12 +36,12 @@ import { ChatGateway } from './chat/chat.gateway';
     }),
     TypeOrmModule.forFeature([]),
   ],
-  //controllers: [ChatController],
+  controllers: [ChatController],
   providers: [
-    // ChatGateway,
-    // ChatService,
-    //  KafkaProducerService,
-    // KafkaConsumerService,
+    ChatGateway,
+    ChatService,
+    KafkaProducerService,
+    KafkaConsumerService,
   ],
 })
 export class AppModule {}
