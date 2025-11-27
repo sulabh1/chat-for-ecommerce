@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json.schemastore.org/nest-cli",
+  "collection": "@nestjs/schematics",
+  "sourceRoot": "apps/main-service/src",
+  "compilerOptions": {
+    "deleteOutDir": true,
+    "webpack": true
+  },
+  "monorepo": true,
+  "root": ".",
+  "projects": {
+    "chat-service": {
+      "type": "application",
+      "root": "apps/chat-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/chat-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/chat-service/tsconfig.app.json"
+      }
+    },
+    "main-service": {
+      "type": "application",
+      "root": "apps/main-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/main-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/main-service/tsconfig.app.json"
+      }
+    }
+  }
+}

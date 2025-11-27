@@ -1,0 +1,109 @@
+{
+  "name": "chat-workspace",
+  "version": "0.0.1",
+  "description": "",
+  "author": "",
+  "private": true,
+  "license": "UNLICENSED",
+  "scripts": {
+    "build": "nest build",
+    "build:main": "nest build main-service",
+    "build:chat": "nest build chat-service",
+    "start:main": "nest start main-service",
+    "start:chat": "nest start chat-service",
+    "start:main:dev": "nest start main-service --watch",
+    "start:chat:dev": "nest start chat-service --watch",
+    "start:all": "concurrently \"npm run start:main:dev\" \"npm run start:chat:dev\"",
+    "format": "prettier --write \"apps/**/*.ts\" \"libs/**/*.ts\"",
+    "start": "nest start",
+    "start:dev": "nest start --watch",
+    "start:debug": "nest start --debug --watch",
+    "start:prod": "node dist/apps/chat-workspace/main",
+    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:cov": "jest --coverage",
+    "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
+    "test:e2e": "jest --config ./apps/chat-workspace/test/jest-e2e.json",
+    "typeorm": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli",
+    "migration:chat:generate": "npm run typeorm -- migration:generate apps/chat-service/src/database/migrations/$npm_config_name -d apps/chat-service/src/config/typeorm.config.ts",
+    "migration:chat:create": "npm run typeorm -- migration:create apps/chat-service/src/database/migrations/$npm_config_name",
+    "migration:chat:run": "npm run typeorm -- migration:run -d apps/chat-service/src/config/typeorm.config.ts",
+    "migration:chat:revert": "npm run typeorm -- migration:revert -d apps/chat-service/src/config/typeorm.config.ts",
+    "migration:chat:show": "npm run typeorm -- migration:show -d apps/chat-service/src/config/typeorm.config.ts",
+    "migration:main:generate": "npm run typeorm -- migration:generate apps/main-service/src/database/migrations/$npm_config_name -d apps/main-service/src/config/typeorm.config.ts",
+    "migration:main:create": "npm run typeorm -- migration:create apps/main-service/src/database/migrations/$npm_config_name",
+    "migration:main:run": "npm run typeorm -- migration:run -d apps/main-service/src/config/typeorm.config.ts",
+    "migration:main:revert": "npm run typeorm -- migration:revert -d apps/main-service/src/config/typeorm.config.ts",
+    "migration:main:show": "npm run typeorm -- migration:show -d apps/main-service/src/config/typeorm.config.ts"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.0.1",
+    "@nestjs/config": "^4.0.2",
+    "@nestjs/core": "^11.0.1",
+    "@nestjs/platform-express": "^11.0.1",
+    "@nestjs/typeorm": "^11.0.0",
+    "@nestjs/websockets": "^11.1.9",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.3",
+    "concurrently": "^9.2.1",
+    "jsonwebtoken": "^9.0.2",
+    "kafkajs": "^2.2.4",
+    "pg": "^8.16.3",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "socket.io": "^4.8.1",
+    "typeorm": "^0.3.27",
+    "typeorm-naming-strategies": "^4.1.0"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.2.0",
+    "@eslint/js": "^9.18.0",
+    "@nestjs/cli": "^11.0.0",
+    "@nestjs/microservices": "^11.1.9",
+    "@nestjs/schematics": "^11.0.0",
+    "@nestjs/testing": "^11.0.1",
+    "@types/express": "^5.0.0",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^22.19.1",
+    "@types/supertest": "^6.0.2",
+    "eslint": "^9.18.0",
+    "eslint-config-prettier": "^10.0.1",
+    "eslint-plugin-prettier": "^5.2.2",
+    "globals": "^16.0.0",
+    "jest": "^30.0.0",
+    "prettier": "^3.4.2",
+    "source-map-support": "^0.5.21",
+    "supertest": "^7.0.0",
+    "ts-jest": "^29.2.5",
+    "ts-loader": "^9.5.2",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.20.0"
+  },
+  "jest": {
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
+    "rootDir": ".",
+    "testRegex": ".*\\.spec\\.ts$",
+    "transform": {
+      "^.+\\.(t|j)s$": "ts-jest"
+    },
+    "collectCoverageFrom": [
+      "**/*.(t|j)s"
+    ],
+    "coverageDirectory": "./coverage",
+    "testEnvironment": "node",
+    "roots": [
+      "<rootDir>/apps/",
+      "<rootDir>/libs/"
+    ],
+    "moduleNameMapper": {
+      "^@app/shared(|/.*)$": "<rootDir>/libs/shared/src/$1"
+    }
+  }
+}
