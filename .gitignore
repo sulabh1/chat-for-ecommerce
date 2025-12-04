@@ -36,7 +36,6 @@ lerna-debug.log*
 !.vscode/extensions.json
 
 # dotenv environment variable files
-.env
 .env.development.local
 .env.test.local
 .env.production.local
@@ -63,4 +62,6 @@ aws/*.json
 
 # Docker
 docker-compose.override.yml
+
+.env
 
