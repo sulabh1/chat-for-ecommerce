@@ -254,14 +254,15 @@ pipeline {
      }
      post {
         always {
-           script { sh '''
-                echo "=== Cleanup ==="
-                # Clean up Docker
-                docker compose down 2>/dev/null || true
-                docker system prune -f 2?/dev/null || true
+           script { 
+               sh '''
+                    echo "=== Cleanup ==="
+                    # Clean up Docker
+                    docker compose down 2>/dev/null || true
+                    docker system prune -f 2?/dev/null || true
 
-                echo "=== Build ${BUILD_NUMBER} Completed ==="
-            '''
+                    echo "=== Build ${BUILD_NUMBER} Completed ==="
+                '''
         }
         success {
             echo "Pipeline SUCCESS"
