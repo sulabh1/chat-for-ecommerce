@@ -1,31 +1,57 @@
-FROM node:20-alpine3.19 AS builder
+# Use multi-stage build with BuildKit
+# syntax=docker/dockerfile:1.4
+FROM node:20-alpine3.19 AS deps
 
 WORKDIR /app
 
+# Copy package files first for better caching
 COPY package*.json ./
 COPY nest-cli.json ./
 COPY tsconfig*.json ./
 
-COPY apps/chat-service/ ./apps/chat-service
+# Install dependencies (use npm ci for reproducible builds)
+RUN npm ci --only=production --ignore-scripts
 
-RUN npm install
+FROM node:20-alpine3.19 AS builder
 
-RUN npm install -g @nestjs/cli
+WORKDIR /app
 
+# Copy package files
+COPY package*.json ./
+COPY nest-cli.json ./
+COPY tsconfig*.json ./
+
+# Install ALL dependencies for build
+RUN npm ci --ignore-scripts
+
+# Copy source code
+COPY apps/chat-service/ ./apps/chat-service/
+
+# Build the application
 RUN npm run build chat-service
 
 FROM node:20-alpine3.19 AS production
 
 WORKDIR /app
 
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-
+# Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S -D -H -u 1001 -G nodejs nestjs
 
+# Copy from previous stages
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+
+# Copy package files for npm scripts if needed
+COPY package*.json ./
+
+# Set permissions
 RUN chown -R nestjs:nodejs /app
 
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 CMD pgrep -f "chat-service" || exit 1
+USER nestjs
 
-CMD [ "node", "dist/apps/chat-service/main.js" ]
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+  CMD pgrep -f "node.*chat-service" || exit 1
+
+CMD ["node", "dist/apps/chat-service/main.js"]
