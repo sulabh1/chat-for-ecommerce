@@ -117,7 +117,7 @@ pipeline {
                     # Check .env files in git
                     echo ""
                     echo "3. Checking .env files..."
-                    if git ls-files | grep -E '^\.env'; then
+                    if git ls-files | grep -E '^\\.env'; then
                         echo "  .env files found in git - add to .gitignore"
                     else
                         echo "  No .env files in git"
