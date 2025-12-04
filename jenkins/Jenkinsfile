@@ -44,12 +44,12 @@ pipeline {
                     #2. check services
                     echo ""
                     echo "Services found:"
-                    docker compose config --service | sed 's/^/ - /'
+                    docker-compose config --services | sed 's/^/ - /'
 
                     #3. check for port conflicts
                     echo ""
                     echo "Checking port mappings..."
-                    PORTS=${docker compose ps --services | xargs -I {} sh -c 'docker compose port {} 2>/dev/null || true'}
+                    PORTS=${docker-compose ps --services | xargs -I {} sh -c 'docker-compose port {} 2>/dev/null || true'}
                     if [ -n "$PORTS" ]; then
                         echo "Exposed ports:"
                         echo "$PORTS" | sed 's/^/ - /'
@@ -147,22 +147,22 @@ pipeline {
                 sh '''
                     echo "=== Running Tests ==="
                     echo "Starting test environment..."
-                    docker compose up -d posthres-main postgres-chat zookeeper kafka
+                    docker-compose up -d posthres-main postgres-chat zookeeper kafka
                     
                     echo "Waiting for services to start..."
                     sleep 30
 
                     echo "Checking service status..."
-                    docker compose ps
+                    docker-compose ps
 
                     # run test here
                     # echo "Running tests..."
-                    # docker compose run --rm main-service npm test || true
-                    # docker compose run --rm chat-service npm test || true
+                    # docker-compose run --rm main-service npm test || true
+                    # docker-compose run --rm chat-service npm test || true
 
                     # Stop services
                     echo "Stopping test environment..."
-                    docker compose down
+                    docker-compose down
 
                     echo "  Tests completed"
 
@@ -258,8 +258,8 @@ pipeline {
                sh '''
                     echo "=== Cleanup ==="
                     # Clean up Docker
-                    docker compose down 2>/dev/null || true
-                    docker system prune -f 2?/dev/null || true
+                    docker-compose down 2>/dev/null || true
+                    docker-system prune -f 2>/dev/null || true
 
                     echo "=== Build ${BUILD_NUMBER} Completed ==="
                 '''
