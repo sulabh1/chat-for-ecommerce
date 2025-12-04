@@ -14,7 +14,7 @@ pipeline {
     }
     
     options {
-        timeout(time: 60, unit: "MINUTES")  // Increased to 60 minutes
+        timeout(time: 60, unit: "MINUTES")
         buildDiscarder(logRotator(numToKeepStr: "10"))
     }
     
@@ -70,7 +70,7 @@ EOF
                     
                     # Display .env file (without passwords for security)
                     echo "Current .env file contents (masked):"
-                    cat .env | sed 's/\(PASSWORD=\|JWT_SECRET=\).*/\1***MASKED***/' || true
+                    cat .env | sed 's/\\(PASSWORD=\\|JWT_SECRET=\\).*/\\1***MASKED***/' || true
                 '''
             }
         }
@@ -144,7 +144,7 @@ EOF
                         else
                             echo "  ✓ Running as non-root user"
                         fi
-                        if grep -q "COPY \\. \\.$" Dockerfile.main; then 
+                        if grep -q "COPY \\\\. \\\\.$" Dockerfile.main; then 
                             echo "  ⚠️  Warning: COPY . . copies everything - ensure .dockerignore is properly configured"
                         else
                             echo "  ✓ COPY command looks good"
@@ -170,10 +170,10 @@ EOF
                     # Check for hardcoded secrets
                     echo ""
                     echo "2. Checking for hardcoded secrets..."
-                    SECRETS_COUNT=$(docker-compose config | grep -E "(password|secret|key).*:.*[a-zA-Z0-9]{8,}" | grep -v "\\$\\|#" | wc -l || echo "0")
+                    SECRETS_COUNT=$(docker-compose config | grep -E "(password|secret|key).*:.*[a-zA-Z0-9]{8,}" | grep -v "\\\\$\\\\|#" | wc -l || echo "0")
                     if [ "$SECRETS_COUNT" -gt 0 ]; then
                         echo "  ⚠️  Warning: Possible hardcoded credentials found ($SECRETS_COUNT)"
-                        docker-compose config | grep -E "(password|secret|key).*:.*[a-zA-Z0-9]{8,}" | grep -v "\\$\\|#" || true
+                        docker-compose config | grep -E "(password|secret|key).*:.*[a-zA-Z0-9]{8,}" | grep -v "\\\\$\\\\|#" || true
                     else
                         echo "  ✓ No obvious hardcoded credentials"
                     fi
@@ -181,7 +181,7 @@ EOF
                     # Check .env files in git
                     echo ""
                     echo "3. Checking .env files in git..."
-                    ENV_FILES=$(git ls-files | grep -E '^\\.env' || true)
+                    ENV_FILES=$(git ls-files | grep -E '^\\\\.env' || true)
                     if [ -n "$ENV_FILES" ]; then
                         echo "  ⚠️  Warning: .env files found in git - consider adding them to .gitignore"
                         echo "$ENV_FILES"
