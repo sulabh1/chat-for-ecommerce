@@ -1,8 +1,10 @@
+version: "3.8"
+
 services:
   postgres-main:
-    image: postgres:13
+    image: postgres:13-alpine # alpine version for smaller size
     env_file:
-      - .env.production
+      - .env
     environment:
       POSTGRES_DB: ${DB_DATABASE}
       POSTGRES_USER: ${DB_USERNAME}
@@ -13,11 +15,16 @@ services:
       - postgres_main_data:/var/lib/postgresql/data
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   postgres-chat:
-    image: postgres:13
+    image: postgres:13-alpine # alpine version for smaller size
     env_file:
-      - .env.production
+      - .env
     environment:
       POSTGRES_DB: ${CHAT_DB_NAME}
       POSTGRES_USER: ${CHAT_DB_USERNAME}
@@ -28,9 +35,14 @@ services:
       - postgres_chat_data:/var/lib/postgresql/data
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${CHAT_DB_USERNAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   zookeeper:
-    image: confluentinc/cp-zookeeper:latest
+    image: confluentinc/cp-zookeeper:7.4.0 # Use specific version
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
@@ -38,19 +50,19 @@ services:
       - app-network
 
   kafka:
-    image: confluentinc/cp-kafka:latest
+    image: confluentinc/cp-kafka:7.4.0 # Use specific version
     depends_on:
       - zookeeper
-    env_file:
-      - .env.production
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092, PLAINTEXT_HOST://localhost:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT, PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_OFFSETS_TOPIC_REPLICSTION_FACTOR: 1
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
     networks:
       - app-network
 
@@ -58,42 +70,72 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.main
+      args:
+        NODE_ENV: production
     env_file:
-      - .env.production
+      - .env
     environment:
-      DB_HOST: ${DB_HOST}
-      DB_PORT: ${DB_PORT}
+      DB_HOST: postgres-main # Use service name
+      DB_PORT: 5432
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_DATABASE: ${DB_DATABASE}
-      KAFKA_BROKERS: ${KAFKA_BROKERS}
+      KAFKA_BROKERS: kafka:9092 # Use service name
       JWT_SECRET: ${JWT_SECRET}
       NODE_ENV: ${NODE_ENV}
     ports:
       - "3001:3001"
     depends_on:
-      - postgres-main
-      - kafka
+      postgres-main:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    networks:
+      - app-network
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "http://localhost:3001/health",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
 
   chat-service:
     build:
       context: .
       dockerfile: Dockerfile.chat
+      args:
+        NODE_ENV: production
     env_file:
-      - .env.production
+      - .env
     environment:
-      CHAT_DB_HOST: ${CHAT_DB_HOST}
-      CHAT_DB_PORT: ${CHAT_DB_PORT}
+      CHAT_DB_HOST: postgres-chat # Use service name
+      CHAT_DB_PORT: 5432
       CHAT_DB_USERNAME: ${CHAT_DB_USERNAME}
       CHAT_DB_PASSWORD: ${CHAT_DB_PASSWORD}
       CHAT_DB_NAME: ${CHAT_DB_NAME}
-      KAFKA_BROKERS: ${KAFKA_BROKERS}
+      KAFKA_BROKERS: kafka:9092 # Use service name
       NODE_ENV: ${NODE_ENV}
     depends_on:
-      - postgres-chat
-      - kafka
+      postgres-chat:
+        condition: service_healthy
+      kafka:
+        condition: service_started
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "node.*chat-service"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     restart: unless-stopped
 
   kafka-ui:
@@ -108,6 +150,8 @@ services:
       - "8081:8080"
     networks:
       - app-network
+    restart: unless-stopped
+
 volumes:
   postgres_main_data:
   postgres_chat_data:

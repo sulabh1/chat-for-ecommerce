@@ -131,22 +131,41 @@ pipeline {
         }
         
         stage('Build Images') {
-            steps {
-                sh '''
-                    echo "=== Building Docker Images ==="
-
-                    echo "Building main-service..."
-                    docker build -f Dockerfile.main -t main-service:${IMAGE_TAG} .
-
-                    echo "Building chat-service..."
-                    docker build -f Dockerfile.chat -t chat-service:${IMAGE_TAG} .
-                    
-                    echo "Images built successfully"
-                    echo "  - main-service:${IMAGE_TAG}"
-                    echo "  - chat-service:${IMAGE_TAG}"
-                '''
-            }
-        }
+    options {
+        timeout(time: 30, unit: 'MINUTES')
+    }
+    steps {
+        sh '''
+            echo "=== Building Docker Images ==="
+            
+            # Enable BuildKit for faster builds with caching
+            export DOCKER_BUILDKIT=1
+            export BUILDKIT_PROGRESS=plain
+            
+            echo "Building main-service..."
+            # Use BuildKit cache
+            docker build \
+                --build-arg BUILDKIT_INLINE_CACHE=1 \
+                --cache-from ${ECR_MAIN}:latest \
+                -f Dockerfile.main \
+                -t main-service:${IMAGE_TAG} \
+                -t main-service:latest \
+                .
+            
+            echo "Building chat-service..."
+            docker build \
+                --build-arg BUILDKIT_INLINE_CACHE=1 \
+                --cache-from ${ECR_CHAT}:latest \
+                -f Dockerfile.chat \
+                -t chat-service:${IMAGE_TAG} \
+                -t chat-service:latest \
+                .
+            
+            echo "Images built successfully"
+            docker images | grep -E "(main-service|chat-service)"
+        '''
+    }
+}
         
         stage('Run Tests') {
             steps {
