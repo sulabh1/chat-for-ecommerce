@@ -75,128 +75,136 @@ EOF
             }
         }
         
-      stage('Analyze Docker Compose') {
-    steps {
-        sh '''
-            echo "=== Analyzing Docker Compose ==="
-            
-            # 1. Validate syntax (continue even with warnings)
-            echo "Validating docker-compose syntax..."
-            
-            # Save output to file and capture exit code
-            docker-compose config > docker-compose-validation.log 2>&1
-            DOCKER_COMPOSE_EXIT=$?
-            
-            if [ $DOCKER_COMPOSE_EXIT -eq 0 ]; then
-                echo "✓ Docker Compose syntax is valid"
-            else
-                echo "✗ Docker Compose syntax error"
-                cat docker-compose-validation.log
-                exit 1
-            fi
+        stage('Analyze Docker Compose') {
+            steps {
+                sh '''
+                    echo "=== Analyzing Docker Compose ==="
+                    
+                    # 1. Validate syntax (continue even with warnings)
+                    echo "Validating docker-compose syntax..."
+                    
+                    # Save output to file and capture exit code
+                    docker-compose config > docker-compose-validation.log 2>&1
+                    DOCKER_COMPOSE_EXIT=$?
+                    
+                    if [ $DOCKER_COMPOSE_EXIT -eq 0 ]; then
+                        echo "✓ Docker Compose syntax is valid"
+                        echo "Note: Warning about 'version' attribute is expected and can be ignored"
+                    else
+                        echo "✗ Docker Compose syntax error"
+                        cat docker-compose-validation.log
+                        exit 1
+                    fi
 
-            # 2. Check services
-            echo ""
-            echo "Services found:"
-            docker-compose config --services | sed 's/^/ - /'
+                    # 2. Check services
+                    echo ""
+                    echo "Services found:"
+                    docker-compose config --services | sed 's/^/ - /'
 
-            # 3. Check for port conflicts
-            echo ""
-            echo "Checking port mappings..."
-            PORTS=$(docker-compose ps --services 2>/dev/null | xargs -I {} sh -c 'docker-compose port {} 2>/dev/null || echo ""' | grep -v "^$")
-            if [ -n "$PORTS" ]; then
-                echo "Exposed ports:"
-                echo "$PORTS" | sed 's/^/ - /'
-            else
-                echo "No ports exposed to host"
-            fi
+                    # 3. Check for port conflicts - SIMPLIFIED
+                    echo ""
+                    echo "Checking port mappings..."
+                    echo "Checking ports from docker-compose.yml..."
+                    
+                    # Extract ports from docker-compose config
+                    PORTS=$(docker-compose config | grep -E "ports:|published:" | grep -v "^#" || true)
+                    if [ -n "$PORTS" ]; then
+                        echo "Exposed ports:"
+                        echo "$PORTS" | sed 's/^/ - /'
+                    else
+                        echo "No ports exposed to host (services use internal networking)"
+                    fi
 
-            # 4. Check for common issues
-            echo ""
-            echo "Checking for issues..."
+                    # 4. Check for common issues
+                    echo ""
+                    echo "Checking for common issues..."
 
-            if ! docker-compose config | grep -A5 "services:" | grep -B5 "image:" | grep "networks:" > /dev/null 2>&1; then
-                echo "Warning: Some services might not have networks defined"
-            fi
-            
-            # Check for restart policies
-            RESTART_COUNT=$(docker-compose config | grep -c "restart:" || echo "0")
-            echo "Services with restart policy: $RESTART_COUNT"
+                    # Check networks
+                    NETWORK_CHECK=$(docker-compose config | grep -A5 "services:" | grep -B5 "image:" | grep "networks:" || true)
+                    if [ -z "$NETWORK_CHECK" ]; then
+                        echo "Warning: Some services might not have networks defined"
+                    else
+                        echo "✓ Services have network configuration"
+                    fi
+                    
+                    # Check for restart policies
+                    RESTART_COUNT=$(docker-compose config | grep -c "restart:" || echo "0")
+                    echo "Services with restart policy: $RESTART_COUNT"
 
-            # Check for depends_on
-            DEPENDS_COUNT=$(docker-compose config | grep -c "depends_on:" || echo "0")
-            echo "Services with dependencies: $DEPENDS_COUNT"
-            
-            echo "✓ Docker Compose analysis completed"
-        '''
-    }
-}
+                    # Check for depends_on
+                    DEPENDS_COUNT=$(docker-compose config | grep -c "depends_on:" || echo "0")
+                    echo "Services with dependencies: $DEPENDS_COUNT"
+                    
+                    echo "✓ Docker Compose analysis completed"
+                '''
+            }
+        }
         
         stage('Security Scan') {
-    steps {
-        sh '''
-            echo "=== SECURITY SCANNING ==="
-            
-            echo "1. Checking Dockerfiles..."
+            steps {
+                sh '''
+                    echo "=== SECURITY SCANNING ==="
+                    
+                    echo "1. Checking Dockerfiles..."
 
-            # Check Dockerfile.main
-            if [ -f "Dockerfile.main" ]; then
-                echo "Dockerfile.main:"
-                if grep -q "^USER root" Dockerfile.main; then
-                    echo "  ⚠️  Warning: Running as root - consider using non-root user"
-                else
-                    echo "  ✓ Running as non-root user"
-                fi
-                if grep -q "COPY \\. \\.$" Dockerfile.main; then 
-                    echo "  ⚠️  Warning: COPY . . copies everything - ensure .dockerignore is properly configured"
-                else
-                    echo "  ✓ COPY command looks good"
-                fi
-                echo "  ✓ Dockerfile.main checks completed"
-            else
-                echo "  ✗ Dockerfile.main not found"
-            fi
+                    # Check Dockerfile.main
+                    if [ -f "Dockerfile.main" ]; then
+                        echo "Dockerfile.main:"
+                        if grep -q "^USER root" Dockerfile.main; then
+                            echo "  ⚠️  Warning: Running as root - consider using non-root user"
+                        else
+                            echo "  ✓ Running as non-root user"
+                        fi
+                        if grep -q "COPY \\. \\.$" Dockerfile.main; then 
+                            echo "  ⚠️  Warning: COPY . . copies everything - ensure .dockerignore is properly configured"
+                        else
+                            echo "  ✓ COPY command looks good"
+                        fi
+                        echo "  ✓ Dockerfile.main checks completed"
+                    else
+                        echo "  ✗ Dockerfile.main not found"
+                    fi
 
-            # Check Dockerfile.chat
-            if [ -f "Dockerfile.chat" ]; then
-                echo "Dockerfile.chat:"
-                if grep -q "^USER root" Dockerfile.chat; then
-                    echo "  ⚠️  Warning: Running as root - consider using non-root user"
-                else
-                    echo "  ✓ Running as non-root user"
-                fi
-                echo "  ✓ Dockerfile.chat checks completed"
-            else
-                echo "  ✗ Dockerfile.chat not found"
-            fi
+                    # Check Dockerfile.chat
+                    if [ -f "Dockerfile.chat" ]; then
+                        echo "Dockerfile.chat:"
+                        if grep -q "^USER root" Dockerfile.chat; then
+                            echo "  ⚠️  Warning: Running as root - consider using non-root user"
+                        else
+                            echo "  ✓ Running as non-root user"
+                        fi
+                        echo "  ✓ Dockerfile.chat checks completed"
+                    else
+                        echo "  ✗ Dockerfile.chat not found"
+                    fi
 
-            # Check for hardcoded secrets - SIMPLIFIED VERSION
-            echo ""
-            echo "2. Checking for hardcoded secrets..."
-            # Use a simpler approach without complex regex
-            SECRETS_FOUND=$(docker-compose config | grep -i -E "(password|secret|key)" | grep -v "#" | wc -l || echo "0")
-            if [ "$SECRETS_FOUND" -gt 0 ]; then
-                echo "  ⚠️  Found $SECRETS_FOUND lines with password/secret/key references"
-                echo "  (This is expected since we're using .env file for actual values)"
-            else
-                echo "  ✓ No password/secret/key references found"
-            fi
+                    # Check for hardcoded secrets - SIMPLIFIED VERSION
+                    echo ""
+                    echo "2. Checking for hardcoded secrets..."
+                    # Use a simpler approach without complex regex
+                    SECRETS_FOUND=$(docker-compose config | grep -i -E "(password|secret|key)" | grep -v "#" | wc -l || echo "0")
+                    if [ "$SECRETS_FOUND" -gt 0 ]; then
+                        echo "  ⚠️  Found $SECRETS_FOUND lines with password/secret/key references"
+                        echo "  (This is expected since we're using .env file for actual values)"
+                    else
+                        echo "  ✓ No password/secret/key references found"
+                    fi
 
-            # Check .env files in git
-            echo ""
-            echo "3. Checking .env files in git..."
-            ENV_FILES_COUNT=$(git ls-files | grep -c '^\\.env' || echo "0")
-            if [ "$ENV_FILES_COUNT" -gt 0 ]; then
-                echo "  ⚠️  Warning: .env files found in git - consider adding them to .gitignore"
-                git ls-files | grep '^\\.env' || true
-            else
-                echo "  ✓ No .env files in git"
-            fi
-            
-            echo "✓ Security scan completed"
-        '''
-    }
-}
+                    # Check .env files in git
+                    echo ""
+                    echo "3. Checking .env files in git..."
+                    ENV_FILES_COUNT=$(git ls-files | grep -c '^\\.env' || echo "0")
+                    if [ "$ENV_FILES_COUNT" -gt 0 ]; then
+                        echo "  ⚠️  Warning: .env files found in git - consider adding them to .gitignore"
+                        git ls-files | grep '^\\.env' || true
+                    else
+                        echo "  ✓ No .env files in git"
+                    fi
+                    
+                    echo "✓ Security scan completed"
+                '''
+            }
+        }
         
         stage('Build Images') {
             options {
@@ -210,23 +218,27 @@ EOF
                     export DOCKER_BUILDKIT=1
                     
                     echo "Building main-service..."
-                    # Build with timeout and progress indication
+                    # Build with timeout and capture exit code properly
                     timeout 25m docker build \
                         --progress=plain \
                         --build-arg NODE_ENV=production \
                         -f Dockerfile.main \
                         -t main-service:${IMAGE_TAG} \
                         -t main-service:latest \
-                        . 2>&1 | tail -50
+                        . > docker-build-main.log 2>&1
                     
-                    BUILD_EXIT=${PIPESTATUS[0]}
+                    BUILD_EXIT=$?
                     if [ $BUILD_EXIT -eq 0 ]; then
                         echo "✓ main-service built successfully"
+                        # Show last few lines of build log
+                        tail -20 docker-build-main.log
                     elif [ $BUILD_EXIT -eq 124 ]; then
                         echo "✗ main-service build timed out"
+                        tail -50 docker-build-main.log
                         exit 1
                     else
                         echo "✗ main-service build failed with exit code: $BUILD_EXIT"
+                        tail -50 docker-build-main.log
                         exit 1
                     fi
                     
@@ -237,22 +249,25 @@ EOF
                         -f Dockerfile.chat \
                         -t chat-service:${IMAGE_TAG} \
                         -t chat-service:latest \
-                        . 2>&1 | tail -50
+                        . > docker-build-chat.log 2>&1
                     
-                    BUILD_EXIT=${PIPESTATUS[0]}
+                    BUILD_EXIT=$?
                     if [ $BUILD_EXIT -eq 0 ]; then
                         echo "✓ chat-service built successfully"
+                        tail -20 docker-build-chat.log
                     elif [ $BUILD_EXIT -eq 124 ]; then
                         echo "✗ chat-service build timed out"
+                        tail -50 docker-build-chat.log
                         exit 1
                     else
                         echo "✗ chat-service build failed with exit code: $BUILD_EXIT"
+                        tail -50 docker-build-chat.log
                         exit 1
                     fi
                     
                     echo "✓ Images built successfully"
                     echo "Built images:"
-                    docker images | grep -E "^(REPOSITORY|main-service|chat-service)"
+                    docker images | grep -E "(main-service|chat-service)" || true
                 '''
             }
         }
@@ -275,8 +290,8 @@ EOF
                     echo "Checking if databases are ready..."
                     # Wait for PostgreSQL to be ready
                     for i in {1..30}; do
-                        if docker-compose exec -T postgres-main pg_isready -U postgres && \
-                           docker-compose exec -T postgres-chat pg_isready -U postgres; then
+                        if docker-compose exec -T postgres-main pg_isready -U postgres > /dev/null 2>&1 && \
+                           docker-compose exec -T postgres-chat pg_isready -U postgres > /dev/null 2>&1; then
                             echo "✓ Databases are ready"
                             break
                         fi
@@ -298,10 +313,13 @@ EOF
                     echo "Running basic health checks..."
                     
                     # Check if services are running
-                    if docker-compose ps | grep -q "Up"; then
-                        echo "✓ Services are running"
+                    RUNNING_SERVICES=$(docker-compose ps --services --filter "status=running" | wc -l)
+                    TOTAL_SERVICES=$(docker-compose ps --services | wc -l)
+                    
+                    if [ "$RUNNING_SERVICES" -eq "$TOTAL_SERVICES" ]; then
+                        echo "✓ All services are running ($RUNNING_SERVICES/$TOTAL_SERVICES)"
                     else
-                        echo "✗ Services not running"
+                        echo "⚠️  Some services not running ($RUNNING_SERVICES/$TOTAL_SERVICES)"
                         docker-compose ps
                     fi
 
@@ -415,6 +433,8 @@ EOF
                 docker-compose down 2>/dev/null || true
                 docker system prune -f 2>/dev/null || true
                 docker volume prune -f 2>/dev/null || true
+                # Clean up log files
+                rm -f docker-compose-validation.log docker-build-main.log docker-build-chat.log 2>/dev/null || true
                 echo "=== Build ${BUILD_NUMBER} Completed ==="
             '''
         }
