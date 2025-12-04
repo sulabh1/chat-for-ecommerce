@@ -254,7 +254,7 @@ pipeline {
      }
      post {
         always {
-           node { sh '''
+           script { sh '''
                 echo "=== Cleanup ==="
                 # Clean up Docker
                 docker compose down 2>/dev/null || true
