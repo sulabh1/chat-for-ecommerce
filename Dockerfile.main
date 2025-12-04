@@ -1,0 +1,42 @@
+FROM node:20-alpine3.19 AS builder
+
+RUN apk update && apk upgrade --no-cache
+
+WORKDIR /app
+
+COPY package*.json ./
+COPY nest-cli.json ./
+COPY tsconfig*.json ./
+COPY apps/main-service/ ./apps/main-service/
+
+RUN npm install
+
+RUN npm install -g @nestjs/cli
+
+RUN npm run build main-service
+
+FROM node:20-alpine3.20 AS production
+
+
+
+WORKDIR /app
+# Optional: Run a vulnerability scan (requires trivy installed)
+# RUN trivy image --severity HIGH node:20-alpine3.20
+COPY package*.json ./
+COPY nest-cli.json ./
+
+COPY --from=builder /app/dist .dist
+COPY --from=builder /app/node_modules ./node_modules
+
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S -D -H -u 1001 -G nodejs nestjs
+
+RUN chown -R nestjs:nodejs /app
+
+USER nestjs
+
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 CMD wget --no-verbose --tries=1 http://localhost:3001/health || exit 1
+
+EXPOSE 3001
+
+CMD ["node", "dist/apps/main-service/main.js"]

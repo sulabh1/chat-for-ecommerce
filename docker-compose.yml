@@ -1,0 +1,117 @@
+services:
+  postgres-main:
+    image: postgres:13
+    env_file:
+      - .env.production
+    environment:
+      POSTGRES_DB: ${DB_DATABASE}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_main_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+  postgres-chat:
+    image: postgres:13
+    env_file:
+      - .env.production
+    environment:
+      POSTGRES_DB: ${CHAT_DB_NAME}
+      POSTGRES_USER: ${CHAT_DB_USERNAME}
+      POSTGRES_PASSWORD: ${CHAT_DB_PASSWORD}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_chat_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - app-network
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    depends_on:
+      - zookeeper
+    env_file:
+      - .env.production
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092, PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT, PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICSTION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    networks:
+      - app-network
+
+  main-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.main
+    env_file:
+      - .env.production
+    environment:
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_DATABASE: ${DB_DATABASE}
+      KAFKA_BROKERS: ${KAFKA_BROKERS}
+      JWT_SECRET: ${JWT_SECRET}
+      NODE_ENV: ${NODE_ENV}
+    ports:
+      - "3001:3001"
+    depends_on:
+      - postgres-main
+      - kafka
+
+  chat-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.chat
+    env_file:
+      - .env.production
+    environment:
+      CHAT_DB_HOST: ${CHAT_DB_HOST}
+      CHAT_DB_PORT: ${CHAT_DB_PORT}
+      CHAT_DB_USERNAME: ${CHAT_DB_USERNAME}
+      CHAT_DB_PASSWORD: ${CHAT_DB_PASSWORD}
+      CHAT_DB_NAME: ${CHAT_DB_NAME}
+      KAFKA_BROKERS: ${KAFKA_BROKERS}
+      NODE_ENV: ${NODE_ENV}
+    depends_on:
+      - postgres-chat
+      - kafka
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    ports:
+      - "8081:8080"
+    networks:
+      - app-network
+volumes:
+  postgres_main_data:
+  postgres_chat_data:
+
+networks:
+  app-network:
+    driver: bridge
