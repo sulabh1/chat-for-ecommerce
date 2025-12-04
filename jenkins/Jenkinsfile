@@ -218,10 +218,14 @@ EOF
                     export DOCKER_BUILDKIT=1
                     
                     echo "Building main-service..."
+                    echo "This may take several minutes due to npm install..."
+                    
                     # Build with timeout and capture exit code properly
-                    timeout 25m docker build \
+                    # Use no-cache to avoid stale cache issues
+                    timeout 20m docker build \
+                        --no-cache \
                         --progress=plain \
-                        --build-arg NODE_ENV=production \
+                        --build-arg NODE_ENV=test \
                         -f Dockerfile.main \
                         -t main-service:${IMAGE_TAG} \
                         -t main-service:latest \
@@ -231,21 +235,32 @@ EOF
                     if [ $BUILD_EXIT -eq 0 ]; then
                         echo "✓ main-service built successfully"
                         # Show last few lines of build log
-                        tail -20 docker-build-main.log
+                        echo "Build log tail:"
+                        tail -10 docker-build-main.log
                     elif [ $BUILD_EXIT -eq 124 ]; then
-                        echo "✗ main-service build timed out"
+                        echo "✗ main-service build timed out after 20 minutes"
+                        echo "Last 50 lines of build log:"
                         tail -50 docker-build-main.log
+                        echo ""
+                        echo "Possible solutions:"
+                        echo "1. Check npm registry connectivity"
+                        echo "2. Reduce dependencies or use pre-built images"
+                        echo "3. Use npm ci instead of npm install"
                         exit 1
                     else
                         echo "✗ main-service build failed with exit code: $BUILD_EXIT"
+                        echo "Last 50 lines of build log:"
                         tail -50 docker-build-main.log
                         exit 1
                     fi
                     
                     echo "Building chat-service..."
-                    timeout 25m docker build \
+                    echo "This may take several minutes due to npm install..."
+                    
+                    timeout 20m docker build \
+                        --no-cache \
                         --progress=plain \
-                        --build-arg NODE_ENV=production \
+                        --build-arg NODE_ENV=test \
                         -f Dockerfile.chat \
                         -t chat-service:${IMAGE_TAG} \
                         -t chat-service:latest \
@@ -254,13 +269,16 @@ EOF
                     BUILD_EXIT=$?
                     if [ $BUILD_EXIT -eq 0 ]; then
                         echo "✓ chat-service built successfully"
-                        tail -20 docker-build-chat.log
+                        echo "Build log tail:"
+                        tail -10 docker-build-chat.log
                     elif [ $BUILD_EXIT -eq 124 ]; then
-                        echo "✗ chat-service build timed out"
+                        echo "✗ chat-service build timed out after 20 minutes"
+                        echo "Last 50 lines of build log:"
                         tail -50 docker-build-chat.log
                         exit 1
                     else
                         echo "✗ chat-service build failed with exit code: $BUILD_EXIT"
+                        echo "Last 50 lines of build log:"
                         tail -50 docker-build-chat.log
                         exit 1
                     fi
