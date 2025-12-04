@@ -3,7 +3,7 @@ pipeline {
      
      environment {
         AWS_REGION = 'us-east-1'
-        AWS_ACCOUNT_ID = sh(script: ''' aws sts get-caller-identity --query Account --output text || echo "123456789012" ''', returnSTdout: true).trim()
+        AWS_ACCOUNT_ID = sh(script: ''' aws sts get-caller-identity --query Account --output text || echo "123456789012" ''', returnStdout: true).trim()
         ECR_MAIN = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/main-service"
         ECR_CHAT = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/chat-service"
         GIT_COMMIT_SHORT = sh(script:'git rev-parse --short HEAD', returnStdout: true).trim()
@@ -254,7 +254,7 @@ pipeline {
      }
      post {
         always {
-            sh '''
+           node { sh '''
                 echo "=== Cleanup ==="
                 # Clean up Docker
                 docker compose down 2>/dev/null || true
@@ -269,6 +269,7 @@ pipeline {
         failure {
             echo "Pipeline FAILED"
         }
+     }
      }
      
 }
