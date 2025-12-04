@@ -1,7 +1,7 @@
 pipeline {
     agent any
      
-     environment {
+    environment {
         AWS_REGION = 'us-east-1'
         AWS_ACCOUNT_ID = sh(script: ''' aws sts get-caller-identity --query Account --output text || echo "123456789012" ''', returnStdout: true).trim()
         ECR_MAIN = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/main-service"
@@ -11,28 +11,31 @@ pipeline {
         ECS_CLUSTER = "chat-app-cluster"
         ECS_SERVICE = "chat-app-service"
         ECS_TASK_FAMILY = "chat-app-task"
-     }
-     options {
+    }
+    
+    options {
         timeout(time:30, unit:"MINUTES")
         buildDiscarder(logRotator(numToKeepStr: "10"))
-
-     }
-     stages {
+    }
+    
+    stages {
         stage('Checkout') {
             steps {
                 checkout scm
                 sh '''
-                     echo "===CICD Pipeline Started ==="
-                     echo "Branch: ${GIT_BRANCH}"
-                     echo "Commit: ${GIT_COMMIT}"
-                     echo "Build: #${BUILD_NUMBER}"
+                    echo "===CICD Pipeline Started ==="
+                    echo "Branch: ${GIT_BRANCH}"
+                    echo "Commit: ${GIT_COMMIT}"
+                    echo "Build: #${BUILD_NUMBER}"
                 '''
             }
         }
+        
         stage('Analyze Docker Compose') {
             steps {
                 sh '''
                     echo "=== Analyzing Docker Compose ==="
+                    
                     # 1. Validate syntax
                     if docker-compose config > /dev/null; then
                         echo "Docker Compose syntax is valid"
@@ -41,15 +44,15 @@ pipeline {
                         exit 1
                     fi
 
-                    #2. check services
+                    # 2. Check services
                     echo ""
                     echo "Services found:"
                     docker-compose config --services | sed 's/^/ - /'
 
-                    #3. check for port conflicts
+                    # 3. Check for port conflicts
                     echo ""
                     echo "Checking port mappings..."
-                    PORTS=${docker-compose ps --services | xargs -I {} sh -c 'docker-compose port {} 2>/dev/null || true'}
+                    PORTS=$(docker-compose ps --services | xargs -I {} sh -c 'docker-compose port {} 2>/dev/null || true')
                     if [ -n "$PORTS" ]; then
                         echo "Exposed ports:"
                         echo "$PORTS" | sed 's/^/ - /'
@@ -57,26 +60,27 @@ pipeline {
                         echo "No ports exposed to host"
                     fi
 
-                    #4. Check for common issues
+                    # 4. Check for common issues
                     echo ""
                     echo "Checking for issues..."
 
-                    if ! grep -A5 "services:" docker-compose.yml | grep -B5 "image:" | grep "networks:" > /dev/null; then
-                        echo "Some services might not have networks"
+                    if ! docker-compose config | grep -A5 "services:" | grep -B5 "image:" | grep "networks:" > /dev/null; then
+                        echo "Warning: Some services might not have networks defined"
                     fi
-                    #Check for restart policies
-                    RESTART_COUNT-$(grep -c "restart:" docker-compose-yml || echo "0")
-                    echo "Service will restart policy: $RESTART_COUNT"
+                    
+                    # Check for restart policies
+                    RESTART_COUNT=$(docker-compose config | grep -c "restart:" || echo "0")
+                    echo "Services with restart policy: $RESTART_COUNT"
 
-                    #Check for depend_on
-                    DEPENDS_COUNT=$(grep -c "depends_on:" docker-compose.yml || echo "0")
-                    echo "Services with dependencies: ${DEPENDS_COUNT}
+                    # Check for depends_on
+                    DEPENDS_COUNT=$(docker-compose config | grep -c "depends_on:" || echo "0")
+                    echo "Services with dependencies: $DEPENDS_COUNT"
+                    
                     echo "Docker Compose analysis completed"
-
-                    '''
+                '''
             }
-
         }
+        
         stage('Security Scan') {
             steps {
                 sh '''
@@ -84,70 +88,72 @@ pipeline {
                     
                     echo "1. Checking Dockerfiles..."
 
-                    # Check Docker.main
+                    # Check Dockerfile.main
                     if [ -f "Dockerfile.main" ]; then
-                        echo " Dockerfile.main:"
+                        echo "Dockerfile.main:"
                         if grep -q "^USER root" Dockerfile.main; then
-                            echo "  Running as root - consider non-root user"
+                            echo "  Warning: Running as root - consider using non-root user"
                         fi
                         if grep -q "COPY \\. \\.$" Dockerfile.main; then 
-                            echo "  COPY . . copies everything - use .dockerignore"
+                            echo "  Warning: COPY . . copies everything - ensure .dockerignore is properly configured"
                         fi
                         echo "  Dockerfile.main checks completed"
                     fi
 
                     # Check Dockerfile.chat
                     if [ -f "Dockerfile.chat" ]; then
-                        echo "  Dockerfile.chat:"
-                        if grep -q "^USER root" Doeckerfile.chat; then
-                            echo "  Running as root - consider non-root user"
+                        echo "Dockerfile.chat:"
+                        if grep -q "^USER root" Dockerfile.chat; then
+                            echo "  Warning: Running as root - consider using non-root user"
                         fi
                         echo "  Dockerfile.chat checks completed"
                     fi
 
-                    # Check for hardcoaded secrets
+                    # Check for hardcoded secrets
                     echo ""
                     echo "2. Checking for hardcoded secrets..."
-                    if grep -E "(password|secret|key).*:.*[a-zA-Z0-9]{8,}" docker-compose.yml | grep -v "\\$\\|#"; then
-                        echo "  Possible hardcoaded credentials found"
+                    if docker-compose config | grep -E "(password|secret|key).*:.*[a-zA-Z0-9]{8,}" | grep -v "\\$\\|#"; then
+                        echo "  Warning: Possible hardcoded credentials found"
                     else
-                        echo "  No obvious hardcoaded credentials"
+                        echo "  No obvious hardcoded credentials"
                     fi
 
                     # Check .env files in git
                     echo ""
                     echo "3. Checking .env files..."
                     if git ls-files | grep -E '^\\.env'; then
-                        echo "  .env files found in git - add to .gitignore"
+                        echo "  Warning: .env files found in git - consider adding them to .gitignore"
                     else
                         echo "  No .env files in git"
                     fi
-                    
                 '''
             }
         }
+        
         stage('Build Images') {
             steps {
                 sh '''
                     echo "=== Building Docker Images ==="
 
-                    echo "Building main-service"
+                    echo "Building main-service..."
                     docker build -f Dockerfile.main -t main-service:${IMAGE_TAG} .
 
-                    echo "Building chat-service...:"
+                    echo "Building chat-service..."
                     docker build -f Dockerfile.chat -t chat-service:${IMAGE_TAG} .
-                    echo "  Images built successfully"
-                    echo " - main-service:${IMAGE_TAG}"
+                    
+                    echo "Images built successfully"
+                    echo "  - main-service:${IMAGE_TAG}"
                     echo "  - chat-service:${IMAGE_TAG}"
                 '''
             }
         }
+        
         stage('Run Tests') {
             steps {
                 sh '''
                     echo "=== Running Tests ==="
                     echo "Starting test environment..."
-                    docker-compose up -d posthres-main postgres-chat zookeeper kafka
+                    docker-compose up -d postgres-main postgres-chat zookeeper kafka
                     
                     echo "Waiting for services to start..."
                     sleep 30
@@ -155,7 +161,7 @@ pipeline {
                     echo "Checking service status..."
                     docker-compose ps
 
-                    # run test here
+                    # Run tests here
                     # echo "Running tests..."
                     # docker-compose run --rm main-service npm test || true
                     # docker-compose run --rm chat-service npm test || true
@@ -164,20 +170,19 @@ pipeline {
                     echo "Stopping test environment..."
                     docker-compose down
 
-                    echo "  Tests completed"
-
-
+                    echo "Tests completed"
                 '''
             }
         }
-        stage("Push to ECR") {
+        
+        stage('Push to ECR') {
             when {
                 branch "master"
             }
             steps {
                 script {
                     sh '''
-                        echo "=== Pushing to aws ECR ==="
+                        echo "=== Pushing to AWS ECR ==="
 
                         echo "Logging into ECR..."
                         aws ecr get-login-password --region ${AWS_REGION} | \
@@ -186,7 +191,7 @@ pipeline {
                         # Create ECR repositories if they don't exist
                         echo "Checking ECR repositories..."
                         for repo in main-service chat-service; do
-                            if ! aws ecr describe-repositories --repository-names \$repo --region ${AWS_REGION}> /dev/null 2>&1; then
+                            if ! aws ecr describe-repositories --repository-names \$repo --region ${AWS_REGION} > /dev/null 2>&1; then
                                 echo "Creating repository: \$repo"
                                 aws ecr create-repository --repository-name \$repo --region ${AWS_REGION}
                             fi
@@ -199,19 +204,21 @@ pipeline {
                         docker push ${ECR_MAIN}:${IMAGE_TAG}
                         docker push ${ECR_MAIN}:latest
 
-                        # Tag amd push chat-service
+                        # Tag and push chat-service
                         echo "Pushing chat-service..."
                         docker tag chat-service:${IMAGE_TAG} ${ECR_CHAT}:${IMAGE_TAG}
+                        docker tag chat-service:${IMAGE_TAG} ${ECR_CHAT}:latest
                         docker push ${ECR_CHAT}:${IMAGE_TAG}
                         docker push ${ECR_CHAT}:latest
 
-                        echo " Image push to ECR"
+                        echo "Images pushed to ECR:"
                         echo "  - ${ECR_MAIN}:${IMAGE_TAG}"
                         echo "  - ${ECR_CHAT}:${IMAGE_TAG}"
                     '''
                 }
             }
         }
+        
         stage('Deploy to ECS') {
             when {
                 branch 'master'
@@ -229,6 +236,7 @@ pipeline {
                 }
             }
         }
+        
         stage('Health Check') {
             when {
                 branch 'master'
@@ -241,8 +249,8 @@ pipeline {
                     sleep 60
 
                     # Run health check script
-                    if[ -f "jenkins/scripts/health-check.sh" ]; then
-                        chmod +x jenkins/schripts/health-check.sh
+                    if [ -f "jenkins/scripts/health-check.sh" ]; then
+                        chmod +x jenkins/scripts/health-check.sh
                         jenkins/scripts/health-check.sh || echo "Health checks completed"
                     else
                         echo "No health check script found"
@@ -251,18 +259,17 @@ pipeline {
                 '''
             }
         }
-     }
-     post {
+    }
+    
+    post {
         always {
-           script { 
-               sh '''
-                    echo "=== Cleanup ==="
-                    # Clean up Docker
-                    docker-compose down 2>/dev/null || true
-                    docker-system prune -f 2>/dev/null || true
-
-                    echo "=== Build ${BUILD_NUMBER} Completed ==="
-                '''
+            sh '''
+                echo "=== Cleanup ==="
+                # Clean up Docker
+                docker-compose down 2>/dev/null || true
+                docker system prune -f 2>/dev/null || true
+                echo "=== Build ${BUILD_NUMBER} Completed ==="
+            '''
         }
         success {
             echo "Pipeline SUCCESS"
@@ -270,7 +277,5 @@ pipeline {
         failure {
             echo "Pipeline FAILED"
         }
-     }
-     }
-     
+    }
 }
