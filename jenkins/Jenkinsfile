@@ -209,7 +209,7 @@ EOF
                         else
                             echo "  ✓ Running as non-root user"
                         fi
-                        if grep -q "COPY \\. \\.$" Dockerfile.main; then 
+                        if grep -q "COPY \\\\. \\\\.$" Dockerfile.main; then 
                             echo "  ⚠️  Warning: COPY . . copies everything - ensure .dockerignore is properly configured"
                         else
                             echo "  ✓ COPY command looks good"
@@ -282,7 +282,7 @@ EOF
                         if grep -q "npm install" Dockerfile.main; then
                             echo "⚠ Found 'npm install' - this can be slow"
                         fi
-                        if grep -q "apt-get install\|apk add\|yum install" Dockerfile.main; then
+                        if grep -q "apt-get install\\|apk add\\|yum install" Dockerfile.main; then
                             echo "⚠ Found package manager install - check packages"
                         fi
                     else
