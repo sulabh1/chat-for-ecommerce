@@ -310,10 +310,9 @@ RUN echo "Final stage: Build complete" && \
     echo "✓ Test build successful"
 EOF
                     
-                    echo "Building test image with --progress=plain..."
+                    echo "Building test image..."
                     timeout 3m docker build \
                         --network=host \
-                        --progress=plain \
                         -f Dockerfile.test \
                         -t docker-test-build . 2>&1 | tee /tmp/docker-test.log
                     
@@ -361,7 +360,6 @@ EOF
                         echo "Step 1: Building base layers..."
                         timeout 5m docker build \
                             --network=host \
-                            --progress=plain \
                             --target builder \
                             -f Dockerfile.main \
                             -t main-service-builder:${IMAGE_TAG} \
@@ -377,7 +375,6 @@ EOF
                                 echo "Building main-service (full build)..."
                                 docker build \
                                     --network=host \
-                                    --progress=plain \
                                     --no-cache \
                                     --build-arg NODE_ENV=test \
                                     -f Dockerfile.main \
@@ -412,7 +409,6 @@ EOF
                             
                             timeout 10m docker build \
                                 --network=host \
-                                --progress=plain \
                                 --build-arg NODE_ENV=test \
                                 -f /tmp/docker-build/Dockerfile.main \
                                 -t main-service:${IMAGE_TAG} \
@@ -438,7 +434,6 @@ EOF
                                 echo "Building chat-service..."
                                 docker build \
                                     --network=host \
-                                    --progress=plain \
                                     --no-cache \
                                     --build-arg NODE_ENV=test \
                                     -f Dockerfile.chat \
